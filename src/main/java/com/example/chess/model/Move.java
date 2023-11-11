@@ -9,4 +9,5 @@ public class Move {
 
     private String moveCode;
     private String moveString;
+    private String boardKeyString;
 }

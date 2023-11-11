@@ -26,27 +26,48 @@ public class Board {
     private List<Move> history;
     private boolean shallow;
 
-    public Board(String[][] boardKey, Integer currentMove, List<Move> history, boolean shallow) {
+    public Board(String[][] boardKey, Integer currentMove, List<Move> history, boolean shallow, boolean checkmate, boolean stalemate) {
         this.boardKey = boardKey;
         this.currentMove = currentMove;
         this.whiteToMove = currentMove % 2 == 0;
-        this.history = history;
+        this.history = history == null ? List.of(new Move("", "", boardKeyArrayToString(boardKey))) : history;
         this.shallow = shallow;
         this.check = false;
-        this.checkmate = false;
-        this.stalemate = false;
+        this.checkmate = checkmate;
+        this.stalemate = stalemate;
         this.pieces = new HashMap<>();
         addPieces();
     }
 
-    public Board shallowCopy() {
-        String[][] keyCopy = new String[8][8];
+    private String[][] boardKeyStringToArray(String boardKeyString) {
+        String[][] boardKeyArray = new String[8][8];
+        String[] boardKeySplitString = boardKeyString.split(",");
         for (int i=0; i<8; i++) {
             for (int j=0; j<8; j++) {
-                keyCopy[i][j] = boardKey[i][j];
+                String key = boardKeySplitString[(8 * i) + j];
+                boardKeyArray[i][j] = Objects.equals(key, "x") ? "" : key;
             }
         }
-        return new Board(keyCopy, history.size(), List.copyOf(history), true);
+        return boardKeyArray;
+    }
+
+    private String boardKeyArrayToString(String[][] boardKeyArray) {
+        StringBuilder boardKeyString = new StringBuilder();
+        for (int i=0; i<8; i++) {
+            for (int j=0; j<8; j++) {
+                String key = boardKeyArray[i][j];
+                boardKeyString.append(key.isEmpty() ? "x," : key + ",");
+            }
+        }
+        return boardKeyString.toString();
+    }
+
+    public Board shallowCopy() {
+        String[][] boardKeyCopy = new String[8][8];
+        for (int i=0; i<8; i++) {
+            System.arraycopy(boardKey[i], 0, boardKeyCopy[i], 0, 8);
+        }
+        return new Board(boardKeyCopy, history.size() - 1, List.copyOf(history), true, checkmate, stalemate);
     }
 
     private void addPieces() {
@@ -94,7 +115,7 @@ public class Board {
     }
 
     public void move(String moveCode) {
-        if (checkmate) {
+        if (checkmate || stalemate) {
             throw new InvalidMoveException("Game is over");
         }
         String moveString = "";
@@ -131,12 +152,13 @@ public class Board {
                     char col = (char) (move[3] + 97);
                     moveString += col;
                     moveString += (move[2] + 1);
-                    if (!shallow) {
-                        history.add(new Move(moveCode, moveString));
-                    }
                     boardKey[move[2]][move[3]] = boardKey[move[0]][move[1]];
                     boardKey[move[0]][move[1]] = "";
+                    if (!shallow) {
+                        history.add(new Move(moveCode, moveString, boardKeyArrayToString(boardKey)));
+                    }
                     pieces = new HashMap<>();
+                    checkStalemate();
                     addPieces();
                     Piece king = pieces.get(whiteToMove ? "wk" : "bk");
                     validateKingMove(whiteToMove, new int[]{king.getRow(), king.getCol()});
@@ -151,7 +173,6 @@ public class Board {
                         } catch (InvalidMoveException e) {
                             check = true;
                         }
-                        stalemate = checkmate && !check;
                     }
                 } else {
                     throw new InvalidMoveException("No piece at given start coordinate");
@@ -176,4 +197,26 @@ public class Board {
             return false;
         }
     }
+
+    private void checkStalemate() {
+        stalemate = (checkmate && !check) || isFiftyNeutral() || isThreeFoldRep();
+    }
+
+    private boolean isFiftyNeutral() {
+        return history.size() > 100 && history.subList(history.size() - 100, history.size()).stream().noneMatch(move -> move.getMoveString().contains("x"));
+    }
+
+    private boolean isThreeFoldRep() {
+        if (history.size() >= 9) {
+            String boardKeyString = history.get(history.size() - 1).getBoardKeyString();
+            for (int i=1; i<3; i++) {
+                if (!Objects.equals(boardKeyString, history.get(history.size() - 1 - 4 * i).getBoardKeyString())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
 }
