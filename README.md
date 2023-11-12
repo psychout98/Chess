@@ -1,2 +1,0 @@
-# Chess
-Spring Chess Server
